@@ -11,8 +11,8 @@ POS 매출 데이터를 AI가 분석하여 실시간 인사이트, 수요 예측
 | 기능 | 설명 |
 |------|------|
 | **대시보드** | 실시간 매출/주문/객단가 지표, 시간대별·요일별 차트, 상품 랭킹 |
-| **AI 매출 예측** | Gemini AI 기반 일별/주간 매출 예측 및 날씨 연동 인사이트 |
-| **재고 관리** | 재고 현황판, 안전재고 알림, 레시피 BOM 기반 자동 차감 |
+| **AI 매출 예측** | Gemini AI 기반 일별/주간 매출 예측, 날씨 연동, 음성 듣기(TTS) |
+| **재고 관리** | 간편 입고/출고, 입출고 이력 추적, 안전재고 설정 & AI 추천 |
 | **AI 마케팅** | SNS 홍보 문구 자동 생성 (Facebook/Instagram/카카오) |
 | **AI 경영 비서** | 매장 데이터 기반 1:1 채팅 컨설팅 |
 
@@ -24,8 +24,8 @@ POS 매출 데이터를 AI가 분석하여 실시간 인사이트, 수요 예측
 |------|------|
 | **Framework** | Next.js 15 (App Router) + React 19 |
 | **Language** | TypeScript 5.8 |
-| **Database & Auth** | Supabase (PostgreSQL + Auth + RLS) |
-| **AI Engine** | Google Gemini API (`@google/genai`) |
+| **Database & Auth** | Supabase (PostgreSQL + Auth + RLS + SSR) |
+| **AI Engine** | Google Gemini 2.5 Flash (`@google/genai`) |
 | **Styling** | Tailwind CSS 3.4 + Framer Motion |
 | **Charts** | Recharts 2 |
 | **Icons** | Lucide React |
@@ -60,13 +60,18 @@ posai/
 │   │   ├── ui/                      # 공통 UI (StatCard, Modal)
 │   │   ├── layout/                  # 레이아웃 (Sidebar, BottomNav, Header)
 │   │   ├── dashboard/               # 대시보드 위젯
-│   │   ├── inventory/               # 재고 컴포넌트
+│   │   ├── inventory/               # 재고 컴포넌트 (Table, StockModal, TransactionHistory, AddItemModal)
 │   │   └── chat/                    # 채팅 컴포넌트
 │   │
 │   ├── hooks/                       # 커스텀 훅 (useAuth, usePOSData)
 │   ├── lib/                         # 유틸리티 & 클라이언트
-│   │   ├── supabase/client.ts       # Supabase 클라이언트
+│   │   ├── supabase/
+│   │   │   ├── client.ts            # 클라이언트 Supabase
+│   │   │   ├── server.ts            # 서버 전용 Supabase (쿠키 기반)
+│   │   │   ├── middleware.ts        # 세션 갱신 미들웨어
+│   │   │   └── queries.ts           # 중앙 쿼리 레이어
 │   │   ├── gemini/client.ts         # Gemini AI (서버 전용)
+│   │   ├── weather/client.ts        # OpenWeatherMap 연동
 │   │   ├── mock-data.ts             # Phase 1 가상 데이터
 │   │   └── utils.ts                 # 포맷팅 유틸
 │   └── types/                       # TypeScript 타입 정의
@@ -80,7 +85,8 @@ posai/
 │       ├── 002_rls_policies.sql     # RLS 멀티테넌트 격리
 │       ├── 003_seed_data.sql        # 데모 시드 데이터
 │       ├── 004_enhanced_schema.sql  # 고도화 9개 테이블
-│       └── 005_seed_bom.sql         # 레시피 BOM 시드
+│       ├── 005_seed_bom.sql         # 레시피 BOM 시드
+│       └── 006_weather_forecasts.sql # 날씨 예보 캐시
 │
 ├── docs/                            # 프로젝트 문서
 │   ├── ServicePlan.md               # 서비스 기획서
@@ -133,6 +139,7 @@ npm run dev
 | `NEXT_PUBLIC_SUPABASE_URL` | O | Supabase 프로젝트 URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | O | Supabase 공개 키 |
 | `SUPABASE_SERVICE_ROLE_KEY` | - | Supabase 서비스 역할 키 (서버 전용) |
+| `OPENWEATHERMAP_API_KEY` | - | OpenWeatherMap API 키 (날씨 예보) |
 | `FACEBOOK_APP_ID` | - | Facebook 앱 ID (마케팅 기능) |
 | `FACEBOOK_APP_SECRET` | - | Facebook 앱 시크릿 |
 
@@ -177,7 +184,8 @@ supabase db push
 
 - **API 키 보호**: Gemini/Facebook API 키는 서버 사이드(API Routes)에서만 사용
 - **멀티테넌트**: RLS(Row Level Security)로 매장별 데이터 완전 격리
-- **Phase 1**: Mock 데이터로 동작, Supabase 없이도 기능 확인 가능
+- **날씨 연동**: OpenWeatherMap 예보를 DB에 캐싱, AI 매출 예측에 활용
+- **TTS**: Web Speech API로 AI 예측 결과 음성 재생 (한국어)
 
 ---
 
@@ -190,8 +198,8 @@ Mock → 실서비스 전환을 위한 단계별 구현 로드맵입니다.
 | **Step 1** | Supabase 인증 연동 | useAuth → Supabase Auth, 로그인/회원가입 실동작, 보호 라우트 미들웨어 | 완료 |
 | **Step 2** | 데이터 레이어 구축 | Supabase 쿼리 함수, API Routes Mock→Supabase 교체 (dashboard, analytics, inventory) | 완료 |
 | **Step 3** | 매장 연동 흐름 | 회원가입→매장 생성→store_id 연결, 하드코딩 제거, RLS 기반 필터 | 완료 |
-| **Step 4** | AI 실데이터 연동 | Gemini 컨텍스트를 실데이터로, 예측→ai_forecasts 저장, 채팅→chat_sessions 저장 | 예정 |
-| **Step 5** | 재고/발주 실시간화 | inventory CRUD + inventory_transactions, 안전재고 알림→alerts 자동 생성 | 예정 |
+| **Step 4** | AI 실데이터 연동 | Gemini 컨텍스트를 실데이터로, 예측→ai_forecasts 저장, 날씨 예보 연동 | 완료 |
+| **Step 5** | 재고관리 실시간화 | 간편 입출고, inventory_transactions 이력, 안전재고 편집 & AI 추천 | 완료 |
 | **Step 6** | 마케팅 연동 | Facebook OAuth, marketing_posts 저장, social_accounts 토큰 관리 | 예정 |
 
 ### DB Phase (스키마 확장)
