@@ -4,20 +4,38 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TrendingUp, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Phase 1 MVP: 데모 로그인 (바로 대시보드로)
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1000);
+    setError("");
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      setError(
+        authError.message === "Invalid login credentials"
+          ? "이메일 또는 비밀번호가 올바르지 않습니다."
+          : authError.message
+      );
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
   };
 
   return (
@@ -32,11 +50,16 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="bg-white p-8 rounded-4xl border border-orange-100 shadow-sm space-y-6">
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm font-medium p-4 rounded-2xl border border-red-100">
+              {error}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">이메일</label>
             <input
               type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
+              placeholder="email@example.com" required
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>
@@ -44,7 +67,7 @@ export default function LoginPage() {
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">비밀번호</label>
             <input
               type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="비밀번호를 입력하세요"
+              placeholder="비밀번호를 입력하세요" required
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>

@@ -2,16 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare } from "lucide-react";
-import { usePOSData } from "@/hooks/usePOSData";
 import Header from "@/components/layout/Header";
 import ChatBubble from "@/components/chat/ChatBubble";
 import MessageInput from "@/components/chat/MessageInput";
 import type { ChatMessage } from "@/types/pos";
 
 export default function ChatPage() {
-  const { dashboard } = usePOSData();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,10 +25,14 @@ export default function ChatPage() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context: dashboard }),
+        body: JSON.stringify({ message, sessionId }),
       });
       const json = await res.json();
       setChatMessages((prev) => [...prev, { role: "ai", text: json.content }]);
+      // 세션 ID 저장 (첫 메시지에서 생성됨)
+      if (json.sessionId && !sessionId) {
+        setSessionId(json.sessionId);
+      }
     } catch (err) {
       console.error(err);
       setChatMessages((prev) => [
@@ -41,21 +44,36 @@ export default function ChatPage() {
     }
   };
 
+  const handleNewChat = () => {
+    setChatMessages([]);
+    setSessionId(null);
+  };
+
   return (
     <>
       <Header title="무엇이든 물어보세요" />
       <div className="bg-white rounded-4xl border border-orange-100 shadow-sm h-[calc(100vh-180px)] md:h-[calc(100vh-220px)] flex flex-col overflow-hidden">
         {/* Chat Header */}
-        <div className="p-4 md:p-6 border-b border-orange-100 bg-orange-50/50 flex items-center gap-4">
-          <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-500 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200">
-            <MessageSquare className="text-white" size={20} />
+        <div className="p-4 md:p-6 border-b border-orange-100 bg-orange-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-500 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200">
+              <MessageSquare className="text-white" size={20} />
+            </div>
+            <div>
+              <h3 className="font-black text-base md:text-lg text-slate-800">AI 경영 비서</h3>
+              <p className="text-[8px] md:text-[10px] text-orange-500 font-black uppercase tracking-widest">
+                Gemini Pro Consultant
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-black text-base md:text-lg text-slate-800">AI 경영 비서</h3>
-            <p className="text-[8px] md:text-[10px] text-orange-500 font-black uppercase tracking-widest">
-              Gemini Pro Consultant
-            </p>
-          </div>
+          {chatMessages.length > 0 && (
+            <button
+              onClick={handleNewChat}
+              className="text-xs font-bold text-orange-500 hover:text-orange-600 bg-orange-100 hover:bg-orange-200 px-3 py-1.5 rounded-xl transition-all"
+            >
+              새 대화
+            </button>
+          )}
         </div>
 
         {/* Messages */}

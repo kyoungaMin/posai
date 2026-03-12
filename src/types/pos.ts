@@ -27,6 +27,8 @@ export interface InventoryStatusItem {
   item_name: string;
   stock_qty: number;
   unit: string;
+  safety_stock?: number;
+  status?: string;
 }
 
 export interface AnalyticsData {

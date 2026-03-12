@@ -2,6 +2,7 @@
 
 import { Loader2, BarChart3, TrendingUp, LayoutDashboard, Package } from "lucide-react";
 import { usePOSData } from "@/hooks/usePOSData";
+import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/layout/Header";
 import StatCard from "@/components/ui/StatCard";
 import SalesChart from "@/components/dashboard/SalesChart";
@@ -11,6 +12,7 @@ import InventoryStatus from "@/components/dashboard/InventoryStatus";
 
 export default function DashboardPage() {
   const { dashboard, loading } = usePOSData();
+  const { user } = useAuth();
 
   if (loading) {
     return (
@@ -27,26 +29,36 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Header title="사장님, 어서오세요!" />
+      <Header
+        title="사장님, 어서오세요!"
+        storeName={user ? `${user.storeName} 사장님` : undefined}
+      />
       <div className="space-y-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
-            title="누적 매출"
+            title="이번달 매출"
             value={`₩${dashboard.totalSales.toLocaleString()}`}
-            change="+12.5%"
             icon={BarChart3}
-            trend="up"
           />
           <StatCard
             title="일일 평균 매출"
-            value={`₩${Math.round(dashboard.totalSales / 30).toLocaleString()}`}
-            change="-2.1%"
+            value={`₩${(dashboard.recentSales.length > 0
+              ? Math.round(dashboard.recentSales.reduce((s, d) => s + d.daily_total, 0) / dashboard.recentSales.length)
+              : 0
+            ).toLocaleString()}`}
             icon={TrendingUp}
-            trend="down"
           />
-          <StatCard title="인기 카테고리" value="커피류" icon={LayoutDashboard} />
-          <StatCard title="재고 건전성" value="94%" change="+4%" icon={Package} trend="up" />
+          <StatCard
+            title="인기 메뉴"
+            value={dashboard.topMenus[0]?.menu_name || "-"}
+            icon={LayoutDashboard}
+          />
+          <StatCard
+            title="재고 품목 수"
+            value={`${dashboard.inventoryStatus.length}종`}
+            icon={Package}
+          />
         </div>
 
         {/* Chart + AI Prediction */}

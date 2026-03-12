@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, TrendingUp, Loader2 } from "lucide-react";
+import { BarChart3, TrendingUp, Loader2, Volume2, VolumeX } from "lucide-react";
 import type { RecentSale } from "@/types/pos";
 
 interface AIPredictionProps {
@@ -12,6 +12,29 @@ interface AIPredictionProps {
 export default function AIPrediction({ recentSales }: AIPredictionProps) {
   const [prediction, setPrediction] = useState<string | null>(null);
   const [predicting, setPredicting] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const handleSpeak = useCallback(() => {
+    if (!prediction) return;
+
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(prediction);
+    utterance.lang = "ko-KR";
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    utteranceRef.current = utterance;
+
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [prediction, speaking]);
 
   const handlePredict = async () => {
     setPredicting(true);
@@ -85,10 +108,21 @@ export default function AIPrediction({ recentSales }: AIPredictionProps) {
             </div>
             <div className="flex gap-2 md:gap-3">
               <button
-                onClick={() => setPrediction(null)}
+                onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); setPrediction(null); }}
                 className="flex-1 bg-white/20 hover:bg-white/30 text-white py-3 rounded-xl text-[10px] md:text-xs font-bold transition-all backdrop-blur-sm"
               >
                 다시 분석
+              </button>
+              <button
+                onClick={handleSpeak}
+                className={`flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl text-[10px] md:text-xs font-bold transition-all backdrop-blur-sm ${
+                  speaking
+                    ? "bg-white text-orange-600"
+                    : "bg-white/20 hover:bg-white/30 text-white"
+                }`}
+              >
+                {speaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                {speaking ? "멈추기" : "듣기"}
               </button>
             </div>
           </motion.div>

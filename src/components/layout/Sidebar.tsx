@@ -9,18 +9,21 @@ import {
   ImageIcon,
   MessageSquare,
   TrendingUp,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { href: "/dashboard", label: "홈 대시보드", icon: LayoutDashboard },
   { href: "/dashboard/analytics", label: "매출 분석", icon: BarChart3 },
-  { href: "/inventory", label: "재고 및 발주", icon: Package },
+  { href: "/inventory", label: "재고 관리", icon: Package },
   { href: "/marketing", label: "AI 마케팅", icon: ImageIcon },
   { href: "/chat", label: "AI 경영 비서", icon: MessageSquare },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-orange-100 p-6 z-20 hidden md:block">
@@ -51,17 +54,18 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="absolute bottom-6 left-6 right-6">
-        <div className="p-5 bg-orange-50 rounded-3xl border border-orange-100 text-center">
-          <p className="text-[10px] uppercase tracking-widest font-black text-orange-400 mb-2">
-            오늘의 응원
-          </p>
-          <p className="text-xs text-orange-700 font-bold leading-relaxed">
-            사장님, 오늘도
-            <br />
-            최고의 하루 되세요!
-          </p>
+      <div className="absolute bottom-6 left-6 right-6 space-y-3">
+        <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
+          <p className="text-xs font-black text-orange-600 truncate">{user?.storeName || "내 매장"}</p>
+          <p className="text-[10px] text-orange-400 font-medium truncate">{user?.email}</p>
         </div>
+        <button
+          onClick={signOut}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
+        >
+          <LogOut size={16} />
+          로그아웃
+        </button>
       </div>
     </aside>
   );

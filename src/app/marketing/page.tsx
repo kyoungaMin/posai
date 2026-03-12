@@ -1,27 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Facebook, Upload, X, TrendingUp, Loader2,
   Share2, ThumbsUp, MessageCircle, Forward, Store, Globe,
 } from "lucide-react";
-import { usePOSData } from "@/hooks/usePOSData";
+import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/layout/Header";
 
 export default function MarketingPage() {
-  const { dashboard } = usePOSData();
+  const { user } = useAuth();
 
   const [facebookConnected, setFacebookConnected] = useState(false);
+  const [facebookPageName, setFacebookPageName] = useState<string | null>(null);
   const [facebookPost, setFacebookPost] = useState("");
   const [facebookTopic, setFacebookTopic] = useState("");
   const [generatingPost, setGeneratingPost] = useState(false);
   const [postingToFacebook, setPostingToFacebook] = useState(false);
+  const [postId, setPostId] = useState<number | null>(null);
   const [marketingFile, setMarketingFile] = useState<{ data: string; mimeType: string } | null>(null);
   const [marketingFilePreview, setMarketingFilePreview] = useState<string | null>(null);
 
+  // 페이스북 연결 상태 확인
+  useEffect(() => {
+    const checkFacebookStatus = async () => {
+      try {
+        const res = await fetch("/api/social/facebook?action=status");
+        const data = await res.json();
+        setFacebookConnected(data.connected);
+        setFacebookPageName(data.pageName);
+      } catch {
+        // 연결 안됨
+      }
+    };
+    checkFacebookStatus();
+  }, []);
+
   const handleConnectFacebook = () => {
-    // 데모 모드
+    // 데모 모드: 바로 연결 상태로 전환
     setFacebookConnected(true);
   };
 
@@ -38,20 +55,20 @@ export default function MarketingPage() {
   };
 
   const handleGeneratePost = async () => {
-    if (!dashboard || generatingPost) return;
+    if (generatingPost) return;
     setGeneratingPost(true);
     try {
       const res = await fetch("/api/ai/marketing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          storeData: dashboard,
           fileData: marketingFile || undefined,
           customTopic: facebookTopic,
         }),
       });
       const json = await res.json();
       setFacebookPost(json.content);
+      if (json.postId) setPostId(json.postId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -59,14 +76,29 @@ export default function MarketingPage() {
     }
   };
 
-  const handlePostToFacebook = () => {
+  const handlePostToFacebook = async () => {
     if (!facebookPost || postingToFacebook) return;
     setPostingToFacebook(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/social/facebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish", postId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.demo
+          ? "[데모 모드] 페이스북에 성공적으로 게시되었습니다!"
+          : "페이스북에 성공적으로 게시되었습니다!");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
       setPostingToFacebook(false);
-      alert("[데모 모드] 페이스북에 성공적으로 게시되었습니다!");
-    }, 2000);
+    }
   };
+
+  const storeName = user?.storeName || "우리 매장";
 
   return (
     <>
@@ -91,7 +123,7 @@ export default function MarketingPage() {
           ) : (
             <div className="flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-xs border border-emerald-100">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              페이스북 연결됨
+              {facebookPageName ? `${facebookPageName} 연결됨` : "페이스북 연결됨"}
             </div>
           )}
         </div>
@@ -165,7 +197,7 @@ export default function MarketingPage() {
                       <Store size={20} className="text-orange-500" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-slate-900">{dashboard?.storeName || "우리 매장"}</div>
+                      <div className="text-sm font-bold text-slate-900">{storeName}</div>
                       <div className="text-[10px] text-slate-400">방금 전 &middot; <Globe size={10} className="inline" /></div>
                     </div>
                   </div>

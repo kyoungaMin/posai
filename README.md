@@ -181,15 +181,28 @@ supabase db push
 
 ---
 
-## 개발 Phase
+## 구현 계획 (Implementation Plan)
 
-| Phase | 내용 | 상태 |
-|-------|------|------|
-| **Phase 1 (MVP)** | 가상 데이터 기반 대시보드, AI 예측, 재고, 마케팅, 채팅 | 진행중 |
-| **Phase 2** | 실제 POS 연동, 주문 정규화, 환불 관리 | 예정 |
-| **Phase 3** | SNS 마케팅 채널 확장, 채팅 이력 저장 | 예정 |
-| **Phase 4** | 레시피 BOM 기반 자동 재고 차감 | 예정 |
-| **Phase 5** | AI 예측 이력/정확도 추적, 알림 시스템, 분석 마트 | 예정 |
+Mock → 실서비스 전환을 위한 단계별 구현 로드맵입니다.
+
+| Step | 내용 | 주요 작업 | 상태 |
+|------|------|-----------|------|
+| **Step 1** | Supabase 인증 연동 | useAuth → Supabase Auth, 로그인/회원가입 실동작, 보호 라우트 미들웨어 | 완료 |
+| **Step 2** | 데이터 레이어 구축 | Supabase 쿼리 함수, API Routes Mock→Supabase 교체 (dashboard, analytics, inventory) | 완료 |
+| **Step 3** | 매장 연동 흐름 | 회원가입→매장 생성→store_id 연결, 하드코딩 제거, RLS 기반 필터 | 완료 |
+| **Step 4** | AI 실데이터 연동 | Gemini 컨텍스트를 실데이터로, 예측→ai_forecasts 저장, 채팅→chat_sessions 저장 | 예정 |
+| **Step 5** | 재고/발주 실시간화 | inventory CRUD + inventory_transactions, 안전재고 알림→alerts 자동 생성 | 예정 |
+| **Step 6** | 마케팅 연동 | Facebook OAuth, marketing_posts 저장, social_accounts 토큰 관리 | 예정 |
+
+### DB Phase (스키마 확장)
+
+| Phase | 테이블 | 비고 |
+|-------|--------|------|
+| **Phase 1 (MVP)** | stores, profiles, menus, sales, inventory, daily_summary | 완료 (시드 데이터 포함) |
+| **Phase 2** | purchase_orders, sales_orders, sales_order_items, refunds | 실제 POS 연동 + 주문 정규화 |
+| **Phase 3** | marketing_posts, social_accounts, chat_sessions, chat_messages | SNS 마케팅 + 채팅 이력 저장 |
+| **Phase 4** | recipes_bom, inventory_transactions | 레시피 기반 자동 재고 차감 |
+| **Phase 5** | ai_forecasts, alerts, alert_settings, mart_hourly_sales | AI 예측 이력 + 알림 시스템 + 분석 마트 |
 
 ---
 

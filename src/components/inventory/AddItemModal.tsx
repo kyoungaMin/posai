@@ -7,23 +7,30 @@ import Modal from "@/components/ui/Modal";
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (item: { item_name: string; stock_qty: number; unit: string }) => Promise<void>;
+  onAdd: (item: { item_name: string; stock_qty: number; unit: string; safety_stock?: number }) => Promise<void>;
 }
 
 export default function AddItemModal({ isOpen, onClose, onAdd }: AddItemModalProps) {
   const [itemName, setItemName] = useState("");
   const [stockQty, setStockQty] = useState(0);
   const [unit, setUnit] = useState("L");
+  const [safetyStock, setSafetyStock] = useState<number | "">("");
   const [adding, setAdding] = useState(false);
 
   const handleSubmit = async () => {
     if (!itemName || !unit || adding) return;
     setAdding(true);
     try {
-      await onAdd({ item_name: itemName, stock_qty: stockQty, unit });
+      await onAdd({
+        item_name: itemName,
+        stock_qty: stockQty,
+        unit,
+        ...(safetyStock !== "" && { safety_stock: safetyStock }),
+      });
       setItemName("");
       setStockQty(0);
       setUnit("L");
+      setSafetyStock("");
       onClose();
     } finally {
       setAdding(false);
@@ -65,7 +72,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd }: AddItemModalPro
             className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">초기 재고</label>
             <input
@@ -81,7 +88,17 @@ export default function AddItemModal({ isOpen, onClose, onAdd }: AddItemModalPro
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              placeholder="L, kg, pcs 등"
+              placeholder="L, kg, pcs"
+              className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-black text-orange-400 uppercase mb-2">안전재고</label>
+            <input
+              type="number"
+              value={safetyStock}
+              onChange={(e) => setSafetyStock(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+              placeholder="선택"
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>

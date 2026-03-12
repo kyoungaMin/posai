@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TrendingUp, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -11,14 +12,54 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Phase 1 MVP: 데모 회원가입 (바로 대시보드로)
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1000);
+    setError("");
+
+    if (password.length < 6) {
+      setError("비밀번호는 6자 이상이어야 합니다.");
+      setLoading(false);
+      return;
+    }
+
+    const supabase = createClient();
+
+    // 1. Supabase Auth 회원가입
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { display_name: storeName || email },
+      },
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
+    // 2. 매장 생성 + 프로필에 store_id 연결
+    if (data.user && storeName) {
+      const { data: store } = await supabase
+        .from("stores")
+        .insert({ name: storeName })
+        .select("store_id")
+        .single();
+
+      if (store) {
+        await supabase
+          .from("profiles")
+          .update({ store_id: store.store_id })
+          .eq("user_id", data.user.id);
+      }
+    }
+
+    router.push("/dashboard");
+    router.refresh();
   };
 
   return (
@@ -33,11 +74,16 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSignup} className="bg-white p-8 rounded-4xl border border-orange-100 shadow-sm space-y-6">
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm font-medium p-4 rounded-2xl border border-red-100">
+              {error}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">매장 이름</label>
             <input
               type="text" value={storeName} onChange={(e) => setStoreName(e.target.value)}
-              placeholder="예: 대박카페"
+              placeholder="예: 대박카페" required
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>
@@ -45,7 +91,7 @@ export default function SignupPage() {
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">이메일</label>
             <input
               type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
+              placeholder="email@example.com" required
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>
@@ -53,7 +99,7 @@ export default function SignupPage() {
             <label className="block text-xs font-black text-orange-400 uppercase mb-2">비밀번호</label>
             <input
               type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="8자 이상 입력하세요"
+              placeholder="6자 이상 입력하세요" required
               className="w-full bg-slate-50 border-2 border-transparent focus:border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all"
             />
           </div>

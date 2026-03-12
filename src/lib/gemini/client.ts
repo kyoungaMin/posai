@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { getWeatherForecast, type DailyWeather } from "@/lib/weather/client";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -20,7 +21,7 @@ export const geminiService = {
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
     });
 
@@ -30,7 +31,7 @@ export const geminiService = {
   /** AI 경영 비서 채팅 (Pro) */
   async chat(message: string, context: unknown) {
     const chat = ai.chats.create({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       config: {
         systemInstruction: `당신은 'POS 인사이트 AI'의 전문 경영 컨설턴트입니다.
         소상공인 사장님들을 위해 POS 데이터를 분석하고, 재고 최적화 및 매출 증대 방안을 제시합니다.
@@ -44,23 +45,49 @@ export const geminiService = {
     return response.text;
   },
 
-  /** 7일간 매출 & 날씨 예보 (Flash Lite, JSON) */
+  /** 7일간 매출 & 실제 날씨 예보 기반 예측 */
   async predictWeeklyForecast(historicalData: unknown) {
     const today = new Date().toISOString().split("T")[0];
+
+    // OpenWeatherMap에서 실제 날씨 예보 가져오기
+    let weatherForecast: DailyWeather[] = [];
+    try {
+      weatherForecast = await getWeatherForecast();
+    } catch (err) {
+      console.error("Weather fetch failed, using AI estimation:", err);
+    }
+
+    const weatherInfo = weatherForecast.length > 0
+      ? `실제 날씨 예보 데이터 (OpenWeatherMap):
+${JSON.stringify(weatherForecast.map((w) => ({
+  날짜: w.date,
+  날씨: w.weatherKr,
+  평균기온: w.temp,
+  최저: w.tempMin,
+  최고: w.tempMax,
+  습도: w.humidity,
+  풍속: w.windSpeed,
+  강수확률: w.pop + "%",
+})), null, 2)}`
+      : "날씨 데이터를 가져올 수 없어 과거 패턴을 기반으로 추정해주세요.";
+
     const prompt = `
       당신은 소상공인 사장님을 돕는 AI 경영 컨설턴트입니다.
       최근 매출 데이터: ${JSON.stringify(historicalData)}
 
-      앞으로 7일간의 가상의 날씨 예보와 그에 따른 예상 매출액을 예측해주세요.
+      ${weatherInfo}
+
+      위의 실제 날씨 예보와 과거 매출 데이터를 분석하여, 앞으로의 예상 매출액을 예측해주세요.
+      날씨가 매출에 미치는 영향(비 오는 날 방문객 감소, 맑은 날 증가 등)을 반영해주세요.
       결과는 반드시 다음 JSON 형식의 배열로만 응답해주세요:
       [
-        { "date": "YYYY-MM-DD", "weather": "맑음|흐림|비|눈", "temp": 숫자, "predictedSales": 숫자, "reason": "간략한 이유" }
+        { "date": "YYYY-MM-DD", "weather": "맑음|흐림|비|눈 등", "temp": 평균기온숫자, "predictedSales": 예상매출숫자, "reason": "날씨와 매출 관계를 포함한 간략한 이유" }
       ]
-      오늘 날짜는 ${today} 입니다. 내일부터 7일치를 생성하세요.
+      오늘 날짜는 ${today} 입니다. 날씨 데이터가 있는 날짜에 대해서만 생성하세요.
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
@@ -112,7 +139,7 @@ export const geminiService = {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [{ parts }],
     });
 
@@ -122,7 +149,7 @@ export const geminiService = {
   /** 범용 텍스트 생성 (Flash Lite) */
   async generateText(prompt: string) {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
     });
 
