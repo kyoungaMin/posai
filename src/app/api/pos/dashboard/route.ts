@@ -11,5 +11,9 @@ export async function GET() {
   }
 
   const data = await getDashboardData(supabase, storeId);
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "private, s-maxage=60, stale-while-revalidate=120",
+    },
+  });
 }

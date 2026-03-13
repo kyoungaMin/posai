@@ -1,5 +1,3 @@
-"use client";
-
 import type { RecentSale } from "@/types/pos";
 
 interface SalesChartProps {

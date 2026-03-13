@@ -1,5 +1,3 @@
-"use client";
-
 import { ArrowUpRight, ArrowDownRight, type LucideIcon } from "lucide-react";
 
 interface StatCardProps {

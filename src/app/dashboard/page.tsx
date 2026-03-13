@@ -1,18 +1,35 @@
 "use client";
 
+import { useMemo } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, BarChart3, TrendingUp, LayoutDashboard, Package } from "lucide-react";
 import { usePOSData } from "@/hooks/usePOSData";
 import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/layout/Header";
 import StatCard from "@/components/ui/StatCard";
 import SalesChart from "@/components/dashboard/SalesChart";
-import AIPrediction from "@/components/dashboard/AIPrediction";
 import RankList from "@/components/dashboard/RankList";
 import InventoryStatus from "@/components/dashboard/InventoryStatus";
+
+const AIPrediction = dynamic(() => import("@/components/dashboard/AIPrediction"), {
+  loading: () => (
+    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-8 rounded-4xl shadow-2xl shadow-orange-200 flex items-center justify-center min-h-[300px]">
+      <Loader2 className="animate-spin" size={32} />
+    </div>
+  ),
+  ssr: false,
+});
 
 export default function DashboardPage() {
   const { dashboard, loading } = usePOSData();
   const { user } = useAuth();
+
+  const dailyAvg = useMemo(() => {
+    if (!dashboard || dashboard.recentSales.length === 0) return 0;
+    return Math.round(
+      dashboard.recentSales.reduce((s, d) => s + d.daily_total, 0) / dashboard.recentSales.length
+    );
+  }, [dashboard]);
 
   if (loading) {
     return (
@@ -43,10 +60,7 @@ export default function DashboardPage() {
           />
           <StatCard
             title="일일 평균 매출"
-            value={`₩${(dashboard.recentSales.length > 0
-              ? Math.round(dashboard.recentSales.reduce((s, d) => s + d.daily_total, 0) / dashboard.recentSales.length)
-              : 0
-            ).toLocaleString()}`}
+            value={`₩${dailyAvg.toLocaleString()}`}
             icon={TrendingUp}
           />
           <StatCard

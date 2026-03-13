@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { ChevronRight, AlertCircle } from "lucide-react";
 import type { InventoryStatusItem } from "@/types/pos";

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
 import {
   Facebook, Upload, X, TrendingUp, Loader2,
   Share2, ThumbsUp, MessageCircle, Forward, Store, Globe,
@@ -37,14 +36,47 @@ export default function MarketingPage() {
     checkFacebookStatus();
   }, []);
 
-  const handleConnectFacebook = () => {
-    // 데모 모드: 바로 연결 상태로 전환
-    setFacebookConnected(true);
+  // URL 파라미터로 OAuth 콜백 결과 처리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fb_connected") === "true") {
+      setFacebookConnected(true);
+      const pageName = params.get("page_name");
+      if (pageName) setFacebookPageName(pageName);
+      window.history.replaceState({}, "", "/marketing");
+    }
+    if (params.get("fb_error")) {
+      alert("페이스북 연결에 실패했습니다: " + params.get("fb_error"));
+      window.history.replaceState({}, "", "/marketing");
+    }
+  }, []);
+
+  const handleConnectFacebook = async () => {
+    try {
+      const res = await fetch("/api/social/facebook?action=auth-url");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("페이스북 연결 설정이 필요합니다.");
+      }
+    } catch {
+      alert("페이스북 연결에 실패했습니다.");
+    }
   };
+
+  const clearPreview = useCallback(() => {
+    if (marketingFilePreview) URL.revokeObjectURL(marketingFilePreview);
+  }, [marketingFilePreview]);
+
+  useEffect(() => {
+    return () => { clearPreview(); };
+  }, [clearPreview]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    clearPreview();
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = (reader.result as string).split(",")[1];
@@ -152,7 +184,7 @@ export default function MarketingPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={marketingFilePreview} alt="Preview" className="w-full h-64 object-cover" />
                   )}
-                  <button onClick={() => { setMarketingFile(null); setMarketingFilePreview(null); }}
+                  <button onClick={() => { clearPreview(); setMarketingFile(null); setMarketingFilePreview(null); }}
                     className="absolute top-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-xl text-rose-500 hover:bg-rose-500 hover:text-white transition-all shadow-lg">
                     <X size={20} />
                   </button>
@@ -186,8 +218,7 @@ export default function MarketingPage() {
 
             {/* Preview */}
             {facebookPost && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-[fadeIn_0.3s_ease-out]">
                 <div className="p-4 border-b border-slate-100 bg-slate-50">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">페이스북 게시물 미리보기</span>
                 </div>
@@ -208,7 +239,7 @@ export default function MarketingPage() {
                     <div className="flex items-center gap-2 text-slate-500 text-xs font-bold"><Forward size={14} /> 공유하기</div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
           </div>
 

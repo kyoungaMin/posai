@@ -1,5 +1,3 @@
-"use client";
-
 import type { TopMenu } from "@/types/pos";
 
 interface RankListProps {

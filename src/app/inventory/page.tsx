@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Plus, Loader2, ClipboardList, Sparkles } from "lucide-react";
 import Header from "@/components/layout/Header";
 import InventoryTable from "@/components/inventory/InventoryTable";
-import AddItemModal from "@/components/inventory/AddItemModal";
-import StockModal from "@/components/inventory/StockModal";
 import TransactionHistory from "@/components/inventory/TransactionHistory";
 import type { InventoryStatusItem } from "@/types/pos";
+
+const AddItemModal = dynamic(() => import("@/components/inventory/AddItemModal"), { ssr: false });
+const StockModal = dynamic(() => import("@/components/inventory/StockModal"), { ssr: false });
 
 interface Transaction {
   txn_id: number;
@@ -93,8 +95,7 @@ export default function InventoryPage() {
     });
     const result = await res.json();
     if (result.success) {
-      await fetchInventory();
-      await fetchTransactions();
+      await Promise.all([fetchInventory(), fetchTransactions()]);
     }
   };
 
@@ -106,8 +107,7 @@ export default function InventoryPage() {
     });
     const data = await res.json();
     if (data.success) {
-      await fetchInventory();
-      await fetchTransactions();
+      await Promise.all([fetchInventory(), fetchTransactions()]);
     }
   };
 

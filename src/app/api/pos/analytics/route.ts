@@ -15,5 +15,9 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get("endDate") || undefined;
 
   const data = await getAnalyticsData(supabase, storeId, startDate, endDate);
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60",
+    },
+  });
 }

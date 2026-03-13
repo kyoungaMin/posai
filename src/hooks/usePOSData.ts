@@ -1,17 +1,30 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { DashboardData, AnalyticsData } from "@/types/pos";
 
-export function usePOSData() {
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
+// Simple in-memory cache for dashboard data
+let dashboardCache: { data: DashboardData | null; timestamp: number } | null = null;
+const CACHE_TTL = 60_000; // 1 minute
 
-  const fetchDashboard = useCallback(async () => {
+export function usePOSData() {
+  const [dashboard, setDashboard] = useState<DashboardData | null>(dashboardCache?.data ?? null);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(!dashboardCache?.data);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchDashboard = useCallback(async (force = false) => {
+    // Return cached data if still fresh
+    if (!force && dashboardCache && Date.now() - dashboardCache.timestamp < CACHE_TTL) {
+      setDashboard(dashboardCache.data);
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/pos/dashboard");
       const data = await res.json();
+      dashboardCache = { data, timestamp: Date.now() };
       setDashboard(data);
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -21,16 +34,23 @@ export function usePOSData() {
   }, []);
 
   const fetchAnalytics = useCallback(async (startDate?: string, endDate?: string) => {
+    // Cancel previous in-flight request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const params = new URLSearchParams();
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
-      const res = await fetch(`/api/pos/analytics?${params}`);
+      const res = await fetch(`/api/pos/analytics?${params}`, { signal: controller.signal });
       const data = await res.json();
       setAnalytics(data);
       return data as AnalyticsData;
     } catch (err) {
-      console.error("Analytics fetch error:", err);
+      if ((err as Error).name !== "AbortError") {
+        console.error("Analytics fetch error:", err);
+      }
       return null;
     }
   }, []);
@@ -46,12 +66,14 @@ export function usePOSData() {
       if (data.success) {
         setDashboard((prev) => {
           if (!prev) return prev;
-          return {
+          const updated = {
             ...prev,
             inventoryStatus: prev.inventoryStatus.map((item) =>
               item.item_id === itemId ? { ...item, stock_qty: stockQty } : item
             ),
           };
+          dashboardCache = { data: updated, timestamp: Date.now() };
+          return updated;
         });
       }
       return data.success;
@@ -70,7 +92,7 @@ export function usePOSData() {
       });
       const data = await res.json();
       if (data.success) {
-        await fetchDashboard();
+        await fetchDashboard(true);
       }
       return data.success;
     } catch (err) {
