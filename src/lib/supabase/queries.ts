@@ -485,6 +485,25 @@ export async function saveAIForecast(
   });
 }
 
+// ── AI 주간 예측 조회 (DB 캐시) ──
+export async function getCachedAIForecasts(
+  supabase: SupabaseClient,
+  storeId: string
+) {
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data } = await supabase
+    .from("ai_forecasts")
+    .select("target_date, predicted_value, details")
+    .eq("store_id", storeId)
+    .eq("forecast_type", "daily_sales")
+    .gte("target_date", today)
+    .order("target_date", { ascending: true })
+    .limit(7);
+
+  return data || [];
+}
+
 // ── 사용자 ID 조회 ──
 export async function getUserId(supabase: SupabaseClient): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -618,7 +637,7 @@ export async function getMarketingPosts(supabase: SupabaseClient, storeId: strin
 export async function getSocialAccount(supabase: SupabaseClient, storeId: string, platform: string) {
   const { data } = await supabase
     .from("social_accounts")
-    .select("account_id, platform, page_name, connected_at, expires_at")
+    .select("account_id, platform, page_name, page_id, access_token, connected_at, expires_at")
     .eq("store_id", storeId)
     .eq("platform", platform)
     .single();

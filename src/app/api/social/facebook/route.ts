@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "매장 정보가 없습니다." }, { status: 401 });
   }
 
-  const { action, postId, accessToken, pageId, pageName } = await request.json();
+  const { action, postId, content, accessToken, pageId, pageName } = await request.json();
 
   // 소셜 계정 연결 저장
   if (action === "connect") {
@@ -59,16 +59,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
-  // 게시물 게시 (데모 모드 - 실제 Facebook API 호출은 Facebook App 승인 후 가능)
+  // 게시물 게시 - Facebook Graph API 호출
   if (action === "publish") {
-    if (postId) {
-      await updateMarketingPostStatus(supabase, storeId, postId, "published", "demo_" + Date.now());
+    const account = await getSocialAccount(supabase, storeId, "facebook");
+
+    if (!account?.access_token || !account?.page_id) {
+      return NextResponse.json({ error: "페이스북 페이지가 연결되지 않았습니다." }, { status: 400 });
     }
-    return NextResponse.json({
-      success: true,
-      postId: "demo_post_id_" + Date.now(),
-      demo: true,
-    });
+
+    const fbRes = await fetch(
+      `https://graph.facebook.com/v18.0/${account.page_id}/feed`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: content,
+          access_token: account.access_token,
+        }),
+      }
+    );
+    const fbData = await fbRes.json();
+
+    if (fbData.error) {
+      console.error("Facebook publish error:", fbData.error);
+      return NextResponse.json({ error: fbData.error.message }, { status: 400 });
+    }
+
+    if (postId) {
+      await updateMarketingPostStatus(supabase, storeId, postId, "published", fbData.id);
+    }
+
+    return NextResponse.json({ success: true, postId: fbData.id });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

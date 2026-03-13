@@ -4,6 +4,7 @@ import {
   getStoreId,
   saveWeatherForecasts,
   getCachedWeatherForecasts,
+  getCachedAIForecasts,
   isWeatherCacheValid,
 } from "@/lib/supabase/queries";
 import { getWeatherForecast } from "@/lib/weather/client";
@@ -19,32 +20,45 @@ export async function GET() {
 
     // 캐시 유효하면 DB에서 반환
     const cacheValid = await isWeatherCacheValid(supabase, storeId);
-    if (cacheValid) {
-      const cached = await getCachedWeatherForecasts(supabase, storeId);
-      return NextResponse.json({ data: cached, source: "cache" });
+    if (!cacheValid) {
+      // 캐시 만료 → OpenWeatherMap API 호출 → DB 저장
+      try {
+        const weatherData = await getWeatherForecast();
+        if (weatherData.length > 0) {
+          await saveWeatherForecasts(
+            supabase,
+            storeId,
+            weatherData.map((w) => ({
+              forecast_date: w.date,
+              weather: w.weatherKr,
+              temp: w.temp,
+              temp_min: w.tempMin,
+              temp_max: w.tempMax,
+              humidity: w.humidity,
+              wind_speed: w.windSpeed,
+              pop: w.pop,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Weather fetch failed:", err);
+      }
     }
 
-    // 캐시 만료 → OpenWeatherMap API 호출 → DB 저장
-    const weatherData = await getWeatherForecast();
-    if (weatherData.length > 0) {
-      await saveWeatherForecasts(
-        supabase,
-        storeId,
-        weatherData.map((w) => ({
-          forecast_date: w.date,
-          weather: w.weatherKr,
-          temp: w.temp,
-          temp_min: w.tempMin,
-          temp_max: w.tempMax,
-          humidity: w.humidity,
-          wind_speed: w.windSpeed,
-          pop: w.pop,
-        }))
-      );
-    }
+    // 날씨 + AI 예측 데이터를 함께 반환
+    const [weather, forecasts] = await Promise.all([
+      getCachedWeatherForecasts(supabase, storeId),
+      getCachedAIForecasts(supabase, storeId),
+    ]);
 
-    const saved = await getCachedWeatherForecasts(supabase, storeId);
-    return NextResponse.json({ data: saved, source: "api" });
+    return NextResponse.json({
+      weather,
+      forecasts,
+    }, {
+      headers: {
+        "Cache-Control": "private, s-maxage=300, stale-while-revalidate=600",
+      },
+    });
   } catch (error) {
     console.error("Weather API Error:", error);
     return NextResponse.json(

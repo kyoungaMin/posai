@@ -115,13 +115,13 @@ export default function MarketingPage() {
       const res = await fetch("/api/social/facebook", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "publish", postId }),
+        body: JSON.stringify({ action: "publish", postId, content: facebookPost }),
       });
       const json = await res.json();
       if (json.success) {
-        alert(json.demo
-          ? "[데모 모드] 페이스북에 성공적으로 게시되었습니다!"
-          : "페이스북에 성공적으로 게시되었습니다!");
+        alert("페이스북에 성공적으로 게시되었습니다!");
+      } else if (json.error) {
+        alert("게시 실패: " + json.error);
       }
     } catch (err) {
       console.error(err);

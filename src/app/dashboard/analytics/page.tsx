@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { Clock, BarChart3, TrendingUp, Package, Users, RefreshCw, Loader2 } from "lucide-react";
+import { Clock, BarChart3, TrendingUp, Package, Users, RefreshCw, Loader2, Volume2, VolumeX } from "lucide-react";
 import { usePOSData } from "@/hooks/usePOSData";
 import Header from "@/components/layout/Header";
 import StatCard from "@/components/ui/StatCard";
@@ -10,6 +10,36 @@ import type { AnalyticsData, WeeklyForecast } from "@/types/pos";
 import { getWeatherEmoji, getSeasonEmoji } from "@/lib/utils";
 
 const Markdown = dynamic(() => import("react-markdown"), { ssr: false });
+
+interface WeatherRow {
+  forecast_date: string;
+  weather: string;
+  temp: number;
+}
+
+interface ForecastRow {
+  target_date: string;
+  predicted_value: number;
+  details: { weather?: string; temp?: number; reason?: string } | null;
+}
+
+function mergeWeatherAndForecasts(
+  weather: WeatherRow[],
+  forecasts: ForecastRow[]
+): WeeklyForecast[] {
+  const forecastMap = new Map(forecasts.map((f) => [f.target_date, f]));
+
+  return weather.map((w) => {
+    const f = forecastMap.get(w.forecast_date);
+    return {
+      date: w.forecast_date,
+      weather: w.weather,
+      temp: w.temp,
+      predictedSales: f?.predicted_value ?? 0,
+      reason: f?.details?.reason ?? "예측 데이터 없음",
+    };
+  });
+}
 
 const HourlyChart = dynamic(
   () => import("@/components/analytics/HourlyChart"),
@@ -35,9 +65,15 @@ export default function AnalyticsPage() {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [generatingInsight, setGeneratingInsight] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
 
   const today = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const [startDate, setStartDate] = useState(today);
+  const weekAgo = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split("T")[0];
+  }, []);
+  const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
 
   const generateAiInsight = useCallback(async (data: AnalyticsData) => {
@@ -69,6 +105,22 @@ export default function AnalyticsPage() {
     }
   }, []);
 
+  const handleSpeak = useCallback(() => {
+    if (!aiInsight) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(aiInsight);
+    utterance.lang = "ko-KR";
+    utterance.rate = 1.0;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [aiInsight, speaking]);
+
   useEffect(() => {
     let cancelled = false;
     setLoadingAnalytics(true);
@@ -83,7 +135,24 @@ export default function AnalyticsPage() {
     return () => { cancelled = true; };
   }, [startDate, endDate, fetchAnalytics, generateAiInsight]);
 
-  const fetchWeeklyForecast = async () => {
+  // 페이지 로딩 시 DB에서 날씨+예측 데이터 가져오기
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/weather");
+        const json = await res.json();
+        if (json.weather && json.forecasts) {
+          const merged = mergeWeatherAndForecasts(json.weather, json.forecasts);
+          if (merged.length > 0) setWeeklyForecast(merged);
+        }
+      } catch (err) {
+        console.error("Weather fetch error:", err);
+      }
+    })();
+  }, []);
+
+  // AI 예측 새로고침 (Gemini 호출)
+  const refreshWeeklyForecast = async () => {
     setLoadingForecast(true);
     try {
       const res = await fetch("/api/ai/predict", {
@@ -92,7 +161,7 @@ export default function AnalyticsPage() {
         body: JSON.stringify({ type: "weekly", historicalData: analytics?.last30Days }),
       });
       const json = await res.json();
-      setWeeklyForecast(json.forecast);
+      if (json.forecast) setWeeklyForecast(json.forecast);
     } catch (err) {
       console.error(err);
     } finally {
@@ -220,12 +289,21 @@ export default function AnalyticsPage() {
                     <p className="text-sm text-slate-400 italic">데이터를 분석하여 인사이트를 생성합니다...</p>
                   )}
                 </div>
-                <div className="mt-auto relative z-10">
+                <div className="mt-auto relative z-10 flex gap-2">
                   <button onClick={() => analytics && generateAiInsight(analytics)} disabled={generatingInsight}
-                    className="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2">
+                    className="flex-1 py-4 bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2">
                     {generatingInsight ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-                    인사이트 새로고침
+                    새로고침
                   </button>
+                  {aiInsight && (
+                    <button onClick={handleSpeak}
+                      className={`px-4 py-4 border border-white/10 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2 ${
+                        speaking ? "bg-white text-slate-900" : "bg-white/10 hover:bg-white/20"
+                      }`}>
+                      {speaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                      {speaking ? "멈추기" : "듣기"}
+                    </button>
+                  )}
                 </div>
                 <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-orange-500/10 blur-3xl rounded-full" />
               </div>
@@ -273,7 +351,14 @@ export default function AnalyticsPage() {
         <div className="bg-white p-8 rounded-4xl border border-orange-100 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-black text-xl text-slate-800">AI 주간 매출 & 날씨 예보</h3>
-            {loadingForecast && <Loader2 className="animate-spin text-orange-500" size={20} />}
+            <button
+              onClick={refreshWeeklyForecast}
+              disabled={loadingForecast}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-500 rounded-xl text-xs font-black transition-all disabled:opacity-50"
+            >
+              {loadingForecast ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
+              AI 예측 새로고침
+            </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
             {weeklyForecast?.map((day, i) => (
@@ -282,18 +367,22 @@ export default function AnalyticsPage() {
                 <div className="text-2xl mb-2">{getWeatherEmoji(day.weather)}</div>
                 <span className="text-xs font-black text-slate-800 mb-1">{day.temp}&deg;C</span>
                 <div className="w-full h-px bg-orange-200 my-2" />
-                <span className="text-[10px] font-black text-orange-600 mb-1">예상 매출</span>
-                <span className="text-xs font-extrabold text-slate-800">₩{(day.predictedSales / 10000).toFixed(1)}만</span>
+                {day.predictedSales > 0 ? (
+                  <>
+                    <span className="text-[10px] font-black text-orange-600 mb-1">예상 매출</span>
+                    <span className="text-xs font-extrabold text-slate-800">₩{(day.predictedSales / 10000).toFixed(1)}만</span>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-400">예측 대기</span>
+                )}
                 <div className="absolute hidden group-hover:block bg-slate-800 text-white text-[10px] p-2 rounded-lg shadow-xl z-20 bottom-full mb-2 w-32 text-center">
                   {day.reason}
                 </div>
               </div>
             ))}
-            {!weeklyForecast && !loadingForecast && (
-              <div className="col-span-full py-10 text-center">
-                <button onClick={fetchWeeklyForecast} className="text-orange-500 font-black text-sm hover:underline">
-                  주간 예보 불러오기
-                </button>
+            {!weeklyForecast && (
+              <div className="col-span-full py-10 text-center text-sm text-slate-400 font-medium">
+                날씨 데이터를 불러오는 중...
               </div>
             )}
           </div>
